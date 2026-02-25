@@ -23,6 +23,7 @@ window.addEventListener("DOMContentLoaded",function() {
   
   updateAmmoDisplay();
   updateHPDisplay();
+  createSkyObjects();
 
   window.addEventListener("keydown", function(e) {
     if(e.key == " ") {
@@ -111,6 +112,63 @@ function spawnRocks() {
   new Rock(-10, 0, -20, "tetrahedron", 5);
   new Rock(20, 0, 10, "tetrahedron", 5);
   new Rock(-10, 0, 35, "tetrahedron", 5);
+
+  // Clear some rocks within a central radius but keep a portion so area
+  // still has obstacles. Uses a retention chance to preserve some rocks.
+  try{
+    const clearRadius = 10;
+    const keepChance = 0.35; // chance to KEEP a rock inside the radius
+    for(let i = rocks.length - 1; i >= 0; i--) {
+      const r = rocks[i];
+      if(!r || !r.obj) continue;
+      const p = r.obj.object3D.position;
+      const dist = Math.sqrt(p.x*p.x + p.y*p.y + p.z*p.z);
+      if(dist < clearRadius) {
+        // randomly keep some rocks so player still has obstacles
+        if(Math.random() < keepChance) {
+          continue; // keep this rock
+        }
+        try{ r.obj.remove(); }catch(e){}
+        rocks.splice(i, 1);
+      }
+    }
+  }catch(e){}
+}
+
+function createSkyObjects(){
+  try{
+    // Moon
+    let moon = document.createElement('a-sphere');
+    moon.setAttribute('radius', 6);
+    moon.setAttribute('position', {x: 30, y: 40, z: -50});
+    moon.setAttribute('color', '#fff7d9');
+    moon.setAttribute('material', 'emissive: #fff7d9; emissiveIntensity: 1');
+    scene.appendChild(moon);
+
+    // Moon light
+    let moonLight = document.createElement('a-entity');
+    moonLight.setAttribute('light', 'type: point; intensity: 0.6; distance: 120; decay: 2; color: #ccdfff');
+    moonLight.setAttribute('position', {x:30, y:40, z:-50});
+    scene.appendChild(moonLight);
+
+    // Stars
+    const starCount = 150;
+    for(let i=0;i<starCount;i++){
+      let s = document.createElement('a-sphere');
+      let r = 80 + Math.random()*60;
+      // random point on upper hemisphere
+      let theta = Math.random() * Math.PI * 2;
+      let phi = Math.random() * Math.PI/2; // upper hemisphere
+      let x = Math.cos(theta)*Math.sin(phi) * r;
+      let y = Math.cos(phi) * r + 10; // lift up
+      let z = Math.sin(theta)*Math.sin(phi) * r;
+      s.setAttribute('radius', 0.08 + Math.random()*0.12);
+      s.setAttribute('position', {x:x, y:y, z:z});
+      s.setAttribute('color', '#ffffff');
+      s.setAttribute('material', 'emissive: #ffffff; emissiveIntensity: 0.8');
+      scene.appendChild(s);
+    }
+  }catch(e){console.warn(e)}
 }
 
 function spawnSpiders(count) {
@@ -137,8 +195,8 @@ function loop(){
     dir.subVectors(playerPos, epos);
     let distToPlayer = dir.length();
     dir.normalize();
-    // enemy speed
-    let speed = 0.02 + (0.01 * Math.random());
+    // enemy speed (slower)
+    let speed = 0.008 + (0.004 * Math.random());
     // move enemy a bit toward player
     epos.x += dir.x * speed;
     epos.y += dir.y * speed * 0.2; // small vertical following
@@ -254,9 +312,20 @@ class Spider {
     this.obj.setAttribute("scale", "1.5 1.5 1.5");
     this.lastAttack = 0;
     scene.appendChild(this.obj);
+    // add to rocks so player collision prevents walking through spiders
+    try{
+      if (typeof rocks !== 'undefined') rocks.push(this);
+    }catch(e){}
   }
   
   remove() {
+    // remove from rocks array if present
+    try{
+      if (typeof rocks !== 'undefined'){
+        let idx = rocks.indexOf(this);
+        if(idx > -1) rocks.splice(idx, 1);
+      }
+    }catch(e){}
     this.obj.remove();
   }
 }
