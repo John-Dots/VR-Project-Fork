@@ -10,7 +10,7 @@ class Player{
     this.driver.setAttribute("radius",0.5);
 
     this.driver.object3D.position.x = this.obj.object3D.position.x;
-    this.driver.object3D.position.y = this.obj.object3D.position.y + 1.5;
+    this.driver.object3D.position.y = this.obj.object3D.position.y + 2.0;
     this.driver.object3D.position.z = this.obj.object3D.position.z;
     scene.append(this.driver);
 

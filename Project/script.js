@@ -61,10 +61,13 @@ function spawnAmmo(count) {
 class AmmoPack {
   constructor() {
     this.obj = document.createElement("a-sphere");
-    this.obj.setAttribute("color", "yellow");
-    this.obj.setAttribute("radius", "0.3");
+    this.obj.setAttribute("color", "#ffcc00");
+    this.obj.setAttribute("radius", "0.8");
     this.obj.setAttribute("static-body", "shape: auto");
-    this.obj.setAttribute("position", {x: rnd(-70, 70), y: 0, z: rnd(-70, 70)});
+    this.obj.setAttribute('material', 'emissive: #ffcc00; emissiveIntensity: 1.2; shader: standard');
+    // raise ammo slightly above ground so it's not buried
+    const ay = 0.6 + Math.random() * 0.6;
+    this.obj.setAttribute("position", {x: rnd(-70, 70), y: ay, z: rnd(-70, 70)});
     scene.appendChild(this.obj);
   }
   
@@ -112,6 +115,41 @@ function spawnRocks() {
   new Rock(-10, 0, -20, "tetrahedron", 5);
   new Rock(20, 0, 10, "tetrahedron", 5);
   new Rock(-10, 0, 35, "tetrahedron", 5);
+  // add many extra randomized rocks, but enforce spacing so center stays walkable
+  try{
+    const extra = 140;
+    const shapes = ["dodecahedron","icosahedron","octahedron","tetrahedron","icosahedron"];
+    const safeRadius = 8; // keep this area relatively open
+    const minSeparation = 6; // min distance between rock centers
+    const attemptsPerRock = 40;
+    for(let i=0;i<extra;i++){
+      let placed = false;
+      for(let attempt=0; attempt<attemptsPerRock && !placed; attempt++){
+        let x = rnd(-70,70);
+        let z = rnd(-70,70);
+        // avoid exact center area
+        if(Math.sqrt(x*x + z*z) < safeRadius) continue;
+
+        // check separation from existing rocks
+        let tooClose = false;
+        for(let ri=0; ri<rocks.length; ri++){
+          const r = rocks[ri];
+          if(!r || !r.obj) continue;
+          const p = r.obj.object3D.position;
+          const dx = p.x - x;
+          const dz = p.z - z;
+          if(Math.sqrt(dx*dx + dz*dz) < minSeparation){ tooClose = true; break; }
+        }
+        if(tooClose) continue;
+
+        let y = 0 + rnd(-1,2);
+        let shape = shapes[Math.floor(Math.random()*shapes.length)];
+        let size = 1 + Math.floor(Math.random()*6);
+        new Rock(x, y, z, shape, size);
+        placed = true;
+      }
+    }
+  }catch(e){}
 
   // Clear some rocks within a central radius but keep a portion so area
   // still has obstacles. Uses a retention chance to preserve some rocks.
