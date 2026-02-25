@@ -4,6 +4,8 @@ let isShooting = false;
 let aim;
 let playerHP = 100;
 let maxHP = 100;
+let playerInvulnerableUntil = 0;
+let playerCollisionDisabledUntil = 0;
 
 window.addEventListener("DOMContentLoaded",function() {
   scene = document.querySelector("a-scene");
@@ -18,6 +20,7 @@ window.addEventListener("DOMContentLoaded",function() {
   camera.appendChild(aim);
 
   spawnRocks();
+  createBoundaryWalls();
   spawnSpiders(30);
   spawnAmmo(10);
   
@@ -151,6 +154,35 @@ function spawnRocks() {
     }
   }catch(e){}
 
+  // add a few extra smaller rocks to increase variety without crowding
+  try{
+    const extraSmall = 28;
+    const shapesSmall = ["tetrahedron","dodecahedron","octahedron"];
+    for(let i=0;i<extraSmall;i++){
+      let placed = false;
+      for(let attempt=0; attempt<25 && !placed; attempt++){
+        let x = rnd(-70,70);
+        let z = rnd(-70,70);
+        // keep a slightly larger central area open
+        if(Math.sqrt(x*x + z*z) < 6) continue;
+        // ensure minimum separation from existing rocks
+        let tooClose = false;
+        for(let ri=0; ri<rocks.length; ri++){
+          const r = rocks[ri];
+          if(!r || !r.obj) continue;
+          const p = r.obj.object3D.position;
+          if(Math.hypot(p.x - x, p.z - z) < 4){ tooClose = true; break; }
+        }
+        if(tooClose) continue;
+        let y = 0 + rnd(-1,1.5);
+        let shape = shapesSmall[Math.floor(Math.random()*shapesSmall.length)];
+        let size = 1 + Math.floor(Math.random()*3);
+        new Rock(x, y, z, shape, size);
+        placed = true;
+      }
+    }
+  }catch(e){}
+
   // Clear some rocks within a central radius but keep a portion so area
   // still has obstacles. Uses a retention chance to preserve some rocks.
   try{
@@ -209,6 +241,36 @@ function createSkyObjects(){
   }catch(e){console.warn(e)}
 }
 
+function createBoundaryWalls(){
+  try{
+    const edge = 78;
+    const height = 6;
+    const thickness = 1;
+
+    const makeWall = (pos, size) => {
+      let b = document.createElement('a-box');
+      b.setAttribute('width', size.x);
+      b.setAttribute('height', size.y);
+      b.setAttribute('depth', size.z);
+      b.setAttribute('position', pos);
+      b.setAttribute('material', 'opacity: 0; transparent: true');
+      b.setAttribute('static-body', 'shape: auto');
+      scene.appendChild(b);
+      // push into rocks as an object with obj property so collision checks work
+      if(typeof rocks === 'undefined') rocks = [];
+      rocks.push({obj: b});
+      return b;
+    }
+
+    // left and right
+    makeWall({x: -edge, y: height/2, z: 0}, {x: thickness, y: height, z: edge*2});
+    makeWall({x: edge, y: height/2, z: 0}, {x: thickness, y: height, z: edge*2});
+    // front and back
+    makeWall({x: 0, y: height/2, z: -edge}, {x: edge*2, y: height, z: thickness});
+    makeWall({x: 0, y: height/2, z: edge}, {x: edge*2, y: height, z: thickness});
+  }catch(e){console.warn(e)}
+}
+
 function spawnSpiders(count) {
   for(let i = 0; i < count; i++) {
     enemies.push(new Spider());
@@ -229,29 +291,144 @@ function loop(){
     let enemy = enemies[ei];
     if (!enemy || !enemy.obj) continue;
     let epos = enemy.obj.object3D.position;
+    if (!enemy.lastPos) enemy.lastPos = {x: epos.x, z: epos.z, t: Date.now()};
     let dir = new THREE.Vector3();
     dir.subVectors(playerPos, epos);
     let distToPlayer = dir.length();
     dir.normalize();
-    // enemy speed (slower)
-    let speed = 0.008 + (0.004 * Math.random());
-    // move enemy a bit toward player
-    epos.x += dir.x * speed;
-    epos.y += dir.y * speed * 0.2; // small vertical following
-    epos.z += dir.z * speed;
+    // enemy speed (slightly faster)
+    let speed = (0.008 + (0.004 * Math.random())) * 1.2; // ~20% speed increase
+    // Attempt to move toward the player but avoid rocks
+    try{
+      const tryAngles = [0, 20, -20, 40, -40, 60, -60, 90, -90];
+      let moved = false;
+      const baseAngle = Math.atan2(playerPos.x - epos.x, playerPos.z - epos.z);
+      for(let a = 0; a < tryAngles.length && !moved; a++){
+        const angle = baseAngle + (tryAngles[a] * Math.PI / 180);
+        const ndir = new THREE.Vector3(Math.sin(angle), 0, Math.cos(angle));
+        const nextX = epos.x + ndir.x * speed;
+        const nextZ = epos.z + ndir.z * speed;
+        // check collision against rocks (simple distance check)
+        let blocked = false;
+        for(let ri = 0; ri < rocks.length; ri++){
+          const r = rocks[ri];
+          if(!r || !r.obj) continue;
+          const rp = r.obj.object3D.position;
+          const dx = rp.x - nextX;
+          const dz = rp.z - nextZ;
+          const dist = Math.sqrt(dx*dx + dz*dz);
+          // estimate rock radius
+          let rockRadius = 1.5;
+          try{
+            const radAttr = r.obj.getAttribute('radius');
+            if(radAttr) rockRadius = Math.max(0.5, parseFloat(radAttr));
+            else {
+              const w = r.obj.getAttribute('width');
+              if(w) rockRadius = Math.max(0.5, parseFloat(w)/2);
+            }
+          }catch(e){}
+          // reduce blocking threshold so enemies can get closer
+          const minDist = rockRadius + 0.8; // enemy radius ~1.0
+          if(dist < minDist){ blocked = true; break; }
+        }
+        if(!blocked){
+          epos.x = nextX;
+          epos.z = nextZ;
+          moved = true;
+        }
+      }
+      // if no unobstructed angle was found, allow a small push-through so enemies don't get stuck
+      if(!moved){
+        epos.x += dir.x * speed * 0.6 + (Math.random()-0.5)*0.02;
+        epos.z += dir.z * speed * 0.6 + (Math.random()-0.5)*0.02;
+      }
+
+      // detect if enemy is stuck (very small movement over time)
+      try{
+        const now = Date.now();
+        const dx = epos.x - enemy.lastPos.x;
+        const dz = epos.z - enemy.lastPos.z;
+        const movedDist = Math.sqrt(dx*dx + dz*dz);
+        if(movedDist > 0.05) {
+          enemy.lastPos.x = epos.x;
+          enemy.lastPos.z = epos.z;
+          enemy.lastPos.t = now;
+        } else {
+          // if not moved for > 1200ms, attempt recovery
+          if(now - enemy.lastPos.t > 1200){
+            // try to relocate to a nearby free spot
+            let recovered = false;
+            for(let attempt=0; attempt<20 && !recovered; attempt++){
+              const ang = Math.random() * Math.PI * 2;
+              const dist = 2 + Math.random() * 4;
+              const cx = epos.x + Math.cos(ang) * dist;
+              const cz = epos.z + Math.sin(ang) * dist;
+              // keep within boundary
+              if(Math.abs(cx) > 76 || Math.abs(cz) > 76) continue;
+              // check separation from rocks
+              let ok = true;
+              for(let ri=0; ri<rocks.length; ri++){
+                const r = rocks[ri];
+                if(!r || !r.obj) continue;
+                const rp = r.obj.object3D.position;
+                const ddx = rp.x - cx;
+                const ddz = rp.z - cz;
+                const dd = Math.sqrt(ddx*ddx + ddz*ddz);
+                let rockRadius = 1.5;
+                try{ const radAttr = r.obj.getAttribute('radius'); if(radAttr) rockRadius = Math.max(0.5, parseFloat(radAttr)); else { const w = r.obj.getAttribute('width'); if(w) rockRadius = Math.max(0.5, parseFloat(w)/2); } }catch(e){}
+                if(dd < rockRadius + 1.0){ ok = false; break; }
+              }
+              if(ok){
+                epos.x = cx;
+                epos.z = cz;
+                enemy.lastPos.x = cx;
+                enemy.lastPos.z = cz;
+                enemy.lastPos.t = now;
+                recovered = true;
+              }
+            }
+            // if unable to find a free spot, nudge randomly
+            if(!recovered){
+              epos.x += (Math.random()-0.5) * 2.0;
+              epos.z += (Math.random()-0.5) * 2.0;
+              enemy.lastPos.t = now;
+            }
+          }
+        }
+      }catch(e){}
+      // small vertical follow always (no collision checks for vertical)
+      epos.y += dir.y * speed * 0.2;
+    }catch(e){}
     // rotate to face player (approx)
     try{
       enemy.obj.object3D.rotation.y = Math.atan2(playerPos.x - epos.x, playerPos.z - epos.z);
     }catch(e){}
 
-    // damage when close, with cooldown
-    if (distToPlayer < 2.0) {
+    // damage when close, with cooldown and player invulnerability + knockback
+    // larger hit distance so enemies hit a bit farther out
+    if (distToPlayer < 2.6) {
       let now = Date.now();
       if (!enemy.lastAttack) enemy.lastAttack = 0;
-      if (now - enemy.lastAttack > 1000) {
+      if (now - enemy.lastAttack > 1000 && now > playerInvulnerableUntil) {
         enemy.lastAttack = now;
+        playerInvulnerableUntil = now + 1000; // 1s player invulnerability
+        // allow the player to pass through nearby rocks briefly after knockback
+        playerCollisionDisabledUntil = now + 700; // 700ms
         playerHP -= 10;
         updateHPDisplay();
+        // small knockback so player isn't pinned
+        try{
+          if(window.player && player.driver && player.driver.object3D){
+            const pushDir = new THREE.Vector3();
+            pushDir.subVectors(playerPos, epos).normalize();
+            const pushAmount = 1.2;
+            player.driver.object3D.position.x += pushDir.x * pushAmount;
+            player.driver.object3D.position.z += pushDir.z * pushAmount;
+            // sync to physics component if present
+            try{ player.driver.components['dynamic-body'].syncToPhysics(); }catch(e){}
+          }
+        }catch(e){}
+
         if (playerHP <= 0) {
           playerHP = 0;
           updateHPDisplay();
@@ -299,7 +476,8 @@ function loop(){
         box.getBoundingSphere(sphere);
       } else {
         sphere.center.copy(enemy.obj.object3D.position);
-        sphere.radius = 1.5;
+        // larger fallback radius so enemy collisions are more forgiving
+        sphere.radius = 2.2;
       }
 
       let bp = bullet.obj.object3D.position;

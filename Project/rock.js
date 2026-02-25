@@ -8,16 +8,19 @@ class Rock {
     // Occasionally make smaller rocks larger/taller for variety
     try{
       if(size < 4 && Math.random() < 0.45){
-        const mul = 1.4 + Math.random()*1.4; // scale multiplier
+        const mul = 1.1 + Math.random()*0.6; // smaller multiplier (1.1 - 1.7)
         size = Math.max(1, Math.floor(size * mul));
-        // raise some height so taller rocks look natural
-        y = y + (size * 0.35);
+        // raise some height but less so
+        y = y + (size * 0.2);
       }
     }catch(e){}
 
+    // clamp maximum size so rocks don't get too huge
+    size = Math.min(size, 10);
+
     if (shape === "box") {
       this.obj.setAttribute("width", size);
-      this.obj.setAttribute("height", size * 1.2);
+      this.obj.setAttribute("height", Math.max(1, size * 1.1));
       this.obj.setAttribute("depth", size);
     } else if (shape === "sphere" || shape === "dodecahedron" || shape === "icosahedron" || shape === "octahedron" || shape === "tetrahedron") {
       this.obj.setAttribute("radius", size);

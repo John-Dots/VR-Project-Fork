@@ -61,15 +61,18 @@ class Player{
     let newY = this.driver.object3D.position.y;
     
     try {
-      const driverRadius = 0.5;
-      const sphere = new THREE.Sphere(new THREE.Vector3(newX, newY, newZ), driverRadius);
-      if (typeof rocks !== 'undefined') {
-        for (let i = 0; i < rocks.length; i++) {
-          const r = rocks[i];
-          if (!r || !r.obj) continue;
-          const box = new THREE.Box3().setFromObject(r.obj.object3D);
-          if (!box.isEmpty() && box.intersectsSphere(sphere)) {
-            return;
+      // allow temporary pass-through after being hit to prevent pinning
+      if (!(window.playerCollisionDisabledUntil && Date.now() < window.playerCollisionDisabledUntil)){
+        const driverRadius = 0.5;
+        const sphere = new THREE.Sphere(new THREE.Vector3(newX, newY, newZ), driverRadius);
+        if (typeof rocks !== 'undefined') {
+          for (let i = 0; i < rocks.length; i++) {
+            const r = rocks[i];
+            if (!r || !r.obj) continue;
+            const box = new THREE.Box3().setFromObject(r.obj.object3D);
+            if (!box.isEmpty() && box.intersectsSphere(sphere)) {
+              return;
+            }
           }
         }
       }
