@@ -2,6 +2,8 @@ let rnd = (l,u) => Math.random() * (u-l) + l
 let scene, camera, player, bullets = [], enemies = [], ammo_boxes = [], rocks = [], ammo_count = 10, enemy_killed = 0;
 let isShooting = false;
 let aim;
+let playerHP = 100;
+let maxHP = 100;
 
 window.addEventListener("DOMContentLoaded",function() {
   scene = document.querySelector("a-scene");
@@ -20,6 +22,7 @@ window.addEventListener("DOMContentLoaded",function() {
   spawnAmmo(10);
   
   updateAmmoDisplay();
+  updateHPDisplay();
 
   window.addEventListener("keydown", function(e) {
     if(e.key == " ") {
@@ -80,6 +83,14 @@ function updateAmmoDisplay() {
   if(vr) vr.setAttribute('text', 'value: Ammo: ' + ammo_count + '; color: red; align: center; width: 2');
 }
 
+function updateHPDisplay(){
+  let perc = Math.max(0, Math.min(1, playerHP / maxHP));
+  let bar = document.getElementById('hpbar');
+  let txt = document.getElementById('hptext');
+  if(bar) bar.style.width = (perc * 100) + '%';
+  if(txt) txt.innerText = 'HP: ' + Math.max(0, Math.floor(playerHP));
+}
+
 function spawnRocks() {
   new Rock(-5, 0.25, -5, "dodecahedron", 2);
   new Rock(5, 0, 10, "dodecahedron", 1);
@@ -112,6 +123,48 @@ function loop(){
   player.update();
 
   let playerPos = camera.object3D.position;
+  if (playerHP <= 0) {
+    document.getElementById('instruction').innerText = 'You Died - Refresh to try again';
+    return; // stop updates
+  }
+
+  // Move enemies toward the player and handle damage on contact
+  for (let ei = 0; ei < enemies.length; ei++) {
+    let enemy = enemies[ei];
+    if (!enemy || !enemy.obj) continue;
+    let epos = enemy.obj.object3D.position;
+    let dir = new THREE.Vector3();
+    dir.subVectors(playerPos, epos);
+    let distToPlayer = dir.length();
+    dir.normalize();
+    // enemy speed
+    let speed = 0.02 + (0.01 * Math.random());
+    // move enemy a bit toward player
+    epos.x += dir.x * speed;
+    epos.y += dir.y * speed * 0.2; // small vertical following
+    epos.z += dir.z * speed;
+    // rotate to face player (approx)
+    try{
+      enemy.obj.object3D.rotation.y = Math.atan2(playerPos.x - epos.x, playerPos.z - epos.z);
+    }catch(e){}
+
+    // damage when close, with cooldown
+    if (distToPlayer < 2.0) {
+      let now = Date.now();
+      if (!enemy.lastAttack) enemy.lastAttack = 0;
+      if (now - enemy.lastAttack > 1000) {
+        enemy.lastAttack = now;
+        playerHP -= 10;
+        updateHPDisplay();
+        if (playerHP <= 0) {
+          playerHP = 0;
+          updateHPDisplay();
+          document.getElementById('instruction').innerText = 'You Died - Refresh to try again';
+          return;
+        }
+      }
+    }
+  }
   for(let a = 0; a < ammo_boxes.length; a++) {
     let ammoPos = ammo_boxes[a].obj.object3D.position;
     let dist = Math.sqrt(Math.pow(playerPos.x - ammoPos.x, 2) + Math.pow(playerPos.y - ammoPos.y, 2) + Math.pow(playerPos.z - ammoPos.z, 2));
@@ -199,7 +252,7 @@ class Spider {
     this.obj.setAttribute("rotation", {x: 0, y: rnd(0, 360), z: 0});
     this.obj.setAttribute("gltf-model", "#demoModel");
     this.obj.setAttribute("scale", "1.5 1.5 1.5");
-    
+    this.lastAttack = 0;
     scene.appendChild(this.obj);
   }
   
