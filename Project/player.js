@@ -30,6 +30,7 @@ class Player{
     
   }
   processImpulses(){
+    if(gameOver) return; // Don't process movement when game is over
     try{
       this.driver.setAttribute("dynamic-body",{mass:20,angularDamping:0.5,linearDamping:0.01});
       

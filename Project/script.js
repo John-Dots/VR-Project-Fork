@@ -1,6 +1,7 @@
 let rnd = (l,u) => Math.random() * (u-l) + l
 let scene, camera, player, bullets = [], enemies = [], ammo_boxes = [], rocks = [], ammo_count = 10, enemy_killed = 0;
 let isShooting = false;
+let gameOver = false;
 let aim;
 let playerHP = 100;
 let maxHP = 100;
@@ -282,6 +283,7 @@ function loop(){
 
   let playerPos = camera.object3D.position;
   if (playerHP <= 0) {
+    gameOver = true;
     document.getElementById('instruction').innerText = 'You Died - Refresh to try again';
     return; // stop updates
   }
@@ -431,6 +433,7 @@ function loop(){
 
         if (playerHP <= 0) {
           playerHP = 0;
+          gameOver = true;
           updateHPDisplay();
           document.getElementById('instruction').innerText = 'You Died - Refresh to try again';
           return;
