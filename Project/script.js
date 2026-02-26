@@ -296,8 +296,8 @@ function loop(){
     dir.subVectors(playerPos, epos);
     let distToPlayer = dir.length();
     dir.normalize();
-    // enemy speed (slightly faster)
-    let speed = (0.008 + (0.004 * Math.random())) * 1.2; // ~20% speed increase
+    // enemy speed (faster)
+    let speed = (0.008 + (0.004 * Math.random())) * 1.44; // ~44% speed increase
     // Attempt to move toward the player but avoid rocks
     try{
       const tryAngles = [0, 20, -20, 40, -40, 60, -60, 90, -90];
