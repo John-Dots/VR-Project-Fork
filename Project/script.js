@@ -16,8 +16,7 @@ window.addEventListener("DOMContentLoaded",function() {
   aim = document.createElement("a-line");
   aim.setAttribute("start", "0 0 0");
   aim.setAttribute("end", "0 0 -50");
-  aim.setAttribute("color", "red");
-  aim.setAttribute("material", "lineWidth: 5");
+  aim.setAttribute("material", "lineWidth: 10; color: #ffffff; shader: flat; emissive: #ffffff; transparent: false");
   camera.appendChild(aim);
 
   spawnRocks();
